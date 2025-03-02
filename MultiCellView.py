@@ -65,7 +65,7 @@ def main():
     with st.sidebar.expander("Configuração Geral", expanded=True):
         mapa_tipo = st.selectbox("Tipo de mapa", ["Padrão", "Satélite", "OpenStreetMap", "Terreno"])
         mostrar_grelha = st.toggle("Mostrar Grelha")
-        tamanho_quadricula = st.slider("Tamanho da Quadricula (m)", 50, 1000, tamanho_quadricula_default, step=50)
+        tamanho_quadricula = st.slider("Tamanho da Quadricula (m)", 200, 1000, tamanho_quadricula_default, step=50)
         cor_grelha = st.color_picker("Cor da Grelha e Rótulos", "#FFA500")
     
     with st.sidebar.expander("Configuração das Células", expanded=True):
