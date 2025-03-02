@@ -1,7 +1,7 @@
 import folium
 import numpy as np
 import streamlit as st
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 import string
 from streamlit_folium import folium_static
 
@@ -15,11 +15,18 @@ def gerar_celula(lat, lon, azimute, alcance, abertura=120):
     pontos.append((lat, lon))  # Fechar a célula
     return pontos
 
+def gerar_rotulo_coluna(indice):
+    letras = string.ascii_uppercase
+    rotulo = ""
+    while indice >= 0:
+        rotulo = letras[indice % 26] + rotulo
+        indice = (indice // 26) - 1
+    return rotulo
+
 def gerar_grelha(area_coberta, espaco):
     min_lat, min_lon, max_lat, max_lon = area_coberta.bounds
     linhas = []
     etiquetas = []
-    letras = string.ascii_uppercase
     
     lon_range = np.arange(min_lon, max_lon, espaco)
     lat_range = np.arange(max_lat, min_lat, -espaco)
@@ -29,20 +36,14 @@ def gerar_grelha(area_coberta, espaco):
     for lat in lat_range:
         linhas.append([(lat, min_lon), (lat, max_lon)])
 
-    perimetro = [
-        (min_lat, min_lon), (min_lat, max_lon),
-        (max_lat, max_lon), (max_lat, min_lon),
-        (min_lat, min_lon)
-    ]
-    
-    for row_index, lat in enumerate(lat_range[:-1]):  
+    perimetro = [(min_lat, min_lon), (min_lat, max_lon), (max_lat, max_lon), (max_lat, min_lon), (min_lat, min_lon)]
+
+    for row_index, lat in enumerate(lat_range[:-1]):
         for col_index, lon in enumerate(lon_range[:-1]):
-            coluna_label = "".join(
-                letras[(col_index // len(letras)) - 1] if col_index >= len(letras) else "" for i in range((col_index // len(letras)) + 1)
-            ) + letras[col_index % len(letras)]
+            coluna_label = gerar_rotulo_coluna(col_index)
             etiqueta = f"{coluna_label}{row_index + 1}"
             etiquetas.append(((lat - espaco / 2, lon + espaco / 2), etiqueta))
-    
+
     return linhas, etiquetas, perimetro
 
 def main():
@@ -58,9 +59,8 @@ def main():
     alcance_default = 3
     tamanho_quadricula_default = 500
 
-    # Layout da barra lateral ajustado conforme sua preferência
     with st.sidebar.expander("Configuração Geral", expanded=True):
-        mapa_tipo = st.selectbox("Tipo de mapa", ["Padrão", "Satélite", "OpenStreetMap"])
+        mapa_tipo = st.selectbox("Tipo de mapa", ["Padrão", "Satélite", "OpenStreetMap", "Terreno"])
         mostrar_grelha = st.toggle("Mostrar Grelha")
         tamanho_quadricula = st.slider("Tamanho da Quadricula (m)", 50, 1000, tamanho_quadricula_default, step=50)
         cor_grelha = st.color_picker("Cor da Grelha e Rótulos", "#FFA500")
@@ -85,19 +85,19 @@ def main():
                 poligono = Polygon(gerar_celula(lat, lon, azimute, alcance))
                 area_coberta = poligono if area_coberta is None else area_coberta.union(poligono)
 
-    tiles_dict = {"Padrão": "CartoDB positron", "Satélite": "Esri WorldImagery", "OpenStreetMap": "OpenStreetMap"}
-    mapa = folium.Map(location=[lat_default, lon_default], zoom_start=13, tiles=tiles_dict[mapa_tipo])
-
+    tiles_dict = {
+        "Padrão": "CartoDB positron",
+        "Satélite": "Esri WorldImagery",
+        "OpenStreetMap": "OpenStreetMap",
+        "Terreno": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+    }
+    
+    mapa = folium.Map(location=[lat_default, lon_default], zoom_start=13, tiles=tiles_dict[mapa_tipo], attr="Esri WorldTopoMap")
+    
     for lat, lon, azimute, cor in celulas:
         folium.Marker([lat, lon], tooltip=f"BTS {lat}, {lon}").add_to(mapa)
         celula_coords = gerar_celula(lat, lon, azimute, alcance)
-        folium.Polygon(
-            locations=celula_coords,
-            color=cor,
-            fill=True,
-            fill_color=cor,
-            fill_opacity=0.3
-        ).add_to(mapa)
+        folium.Polygon(locations=celula_coords, color=cor, fill=True, fill_color=cor, fill_opacity=0.3).add_to(mapa)
 
     if mostrar_grelha and area_coberta is not None:
         espaco = tamanho_quadricula / 111000
@@ -120,17 +120,12 @@ def main():
                 width: 100% !important;
                 height: calc(100vh - 20px) !important;
             }
-            @media (max-width: 768px) {
-                iframe {
-                    height: 100vh !important;
-                }
-            }
         </style>
         """,
         unsafe_allow_html=True
     )
-
-    folium_static(mapa, width=800, height=600)
+    
+    folium_static(mapa)
 
 if __name__ == "__main__":
     main()
