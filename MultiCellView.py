@@ -23,13 +23,16 @@ def gerar_rotulo_coluna(indice):
         indice = (indice // 26) - 1
     return rotulo
 
-def gerar_grelha(area_coberta, espaco):
+def gerar_grelha(area_coberta, tamanho_quadricula):
     min_lat, min_lon, max_lat, max_lon = area_coberta.bounds
     linhas = []
     etiquetas = []
     
-    lon_range = np.arange(min_lon, max_lon, espaco)
-    lat_range = np.arange(max_lat, min_lat, -espaco)
+    delta_lat = tamanho_quadricula / 111000  # Conversão de metros para graus de latitude
+    delta_lon = lambda lat: tamanho_quadricula / (111000 * np.cos(np.radians(lat)))  # Ajuste da longitude
+    
+    lat_range = np.arange(max_lat, min_lat, -delta_lat)
+    lon_range = np.arange(min_lon, max_lon, delta_lon((max_lat + min_lat) / 2))
 
     for lon in lon_range:
         linhas.append([(min_lat, lon), (max_lat, lon)])
@@ -42,7 +45,7 @@ def gerar_grelha(area_coberta, espaco):
         for col_index, lon in enumerate(lon_range[:-1]):
             coluna_label = gerar_rotulo_coluna(col_index)
             etiqueta = f"{coluna_label}{row_index + 1}"
-            etiquetas.append(((lat - espaco / 2, lon + espaco / 2), etiqueta))
+            etiquetas.append(((lat - delta_lat / 2, lon + delta_lon(lat) / 2), etiqueta))
 
     return linhas, etiquetas, perimetro
 
@@ -100,8 +103,7 @@ def main():
         folium.Polygon(locations=celula_coords, color=cor, fill=True, fill_color=cor, fill_opacity=0.3).add_to(mapa)
 
     if mostrar_grelha and area_coberta is not None:
-        espaco = tamanho_quadricula / 111000
-        grelha, etiquetas, perimetro = gerar_grelha(area_coberta, espaco)
+        grelha, etiquetas, perimetro = gerar_grelha(area_coberta, tamanho_quadricula)
         for linha in grelha:
             folium.PolyLine(linha, color=cor_grelha, weight=2, opacity=0.9).add_to(mapa)
         for (pos, label) in etiquetas:
