@@ -12,7 +12,7 @@ def gerar_celula(lat, lon, azimute, alcance, abertura=120):
         dlat = (alcance / 111) * np.cos(angulo_rad)
         dlon = (alcance / (111 * np.cos(np.radians(lat)))) * np.sin(angulo_rad)
         pontos.append((lat + dlat, lon + dlon))
-    pontos.append((lat, lon))  # Fechar a célula
+    pontos.append((lat, lon))
     return pontos
 
 def gerar_rotulo_coluna(indice):
@@ -24,28 +24,37 @@ def gerar_rotulo_coluna(indice):
     return rotulo
 
 def gerar_grelha(area_coberta, tamanho_quadricula):
+    if area_coberta is None:
+        return [], [], []
+
     min_lat, min_lon, max_lat, max_lon = area_coberta.bounds
     linhas = []
     etiquetas = []
     
-    delta_lat = tamanho_quadricula / 111000  # Conversão de metros para graus de latitude
-    delta_lon = lambda lat: tamanho_quadricula / (111000 * np.cos(np.radians(lat)))  # Ajuste da longitude
+    delta_lat = tamanho_quadricula / 111000
     
     lat_range = np.arange(max_lat, min_lat, -delta_lat)
-    lon_range = np.arange(min_lon, max_lon, delta_lon((max_lat + min_lat) / 2))
-
-    for lon in lon_range:
-        linhas.append([(min_lat, lon), (max_lat, lon)])
+    
+    lon_range = []
+    if lat_range.size > 0:
+        delta_lon = tamanho_quadricula / (111000 * np.cos(np.radians((max_lat + min_lat) / 2)))
+        lon_range = np.arange(min_lon, max_lon, delta_lon)
+    
     for lat in lat_range:
         linhas.append([(lat, min_lon), (lat, max_lon)])
+    
+    for lon in lon_range:
+        linhas.append([(min_lat, lon), (max_lat, lon)])
 
     perimetro = [(min_lat, min_lon), (min_lat, max_lon), (max_lat, max_lon), (max_lat, min_lon), (min_lat, min_lon)]
 
     for row_index, lat in enumerate(lat_range[:-1]):
-        for col_index, lon in enumerate(lon_range[:-1]):
-            coluna_label = gerar_rotulo_coluna(col_index)
-            etiqueta = f"{coluna_label}{row_index + 1}"
-            etiquetas.append(((lat - delta_lat / 2, lon + delta_lon(lat) / 2), etiqueta))
+        if lon_range.size > 0:
+            delta_lon = tamanho_quadricula / (111000 * np.cos(np.radians(lat)))
+            for col_index, lon in enumerate(lon_range[:-1]):
+                coluna_label = gerar_rotulo_coluna(col_index)
+                etiqueta = f"{coluna_label}{row_index + 1}"
+                etiquetas.append(((lat - delta_lat / 2, lon + delta_lon / 2), etiqueta))
 
     return linhas, etiquetas, perimetro
 
@@ -94,13 +103,23 @@ def main():
         "OpenStreetMap": "OpenStreetMap",
         "Terreno": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
     }
-    
+
+    # Recria o mapa a cada alteração
     mapa = folium.Map(location=[lat_default, lon_default], zoom_start=13, tiles=tiles_dict[mapa_tipo], attr="Esri WorldTopoMap")
-    
+
     for lat, lon, azimute, cor in celulas:
         folium.Marker([lat, lon], tooltip=f"BTS {lat}, {lon}").add_to(mapa)
         celula_coords = gerar_celula(lat, lon, azimute, alcance)
         folium.Polygon(locations=celula_coords, color=cor, fill=True, fill_color=cor, fill_opacity=0.3).add_to(mapa)
+
+    # Centraliza o mapa na área da grade (mesmo se a grade não estiver ativa)
+    if area_coberta is not None:
+        min_lat, min_lon, max_lat, max_lon = area_coberta.bounds
+        mapa.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+    elif celulas:
+        lats = [lat for lat, _, _, _ in celulas]
+        lons = [lon for _, lon, _, _ in celulas]
+        mapa.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
     if mostrar_grelha and area_coberta is not None:
         grelha, etiquetas, perimetro = gerar_grelha(area_coberta, tamanho_quadricula)
@@ -110,11 +129,8 @@ def main():
             folium.Marker(pos, icon=folium.DivIcon(html=f'<div style="font-size: 8pt; color: {cor_grelha};">{label}</div>')).add_to(mapa)
         folium.PolyLine(perimetro, color=cor_grelha, weight=4, opacity=1).add_to(mapa)
 
-    if area_coberta:
-        mapa.fit_bounds(area_coberta.bounds)
-
     folium.LayerControl().add_to(mapa)
-    
+
     st.markdown(
         """
         <style>
@@ -126,7 +142,7 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    
+
     folium_static(mapa)
 
 if __name__ == "__main__":
