@@ -72,7 +72,7 @@ def main():
     tamanho_quadricula_default = 500
 
     with st.sidebar.expander("Configuração Geral", expanded=True):
-        mapa_tipo = st.selectbox("Tipo de mapa", ["Padrão", "Satélite", "OpenStreetMap", "Terreno"])
+        mapa_tipo = st.selectbox("Tipo de mapa", ["Padrão", "Satélite", "Terreno"])
         mostrar_grelha = st.toggle("Mostrar Grelha")
         tamanho_quadricula = st.slider("Tamanho da Quadricula (m)", 200, 1000, tamanho_quadricula_default, step=50)
         cor_grelha = st.color_picker("Cor da Grelha e Rótulos", "#FFA500")
@@ -97,12 +97,47 @@ def main():
                 poligono = Polygon(gerar_celula(lat, lon, azimute, alcance))
                 area_coberta = poligono if area_coberta is None else area_coberta.union(poligono)
 
-    tiles_dict = {
-        "Padrão": "CartoDB positron",
-        "Satélite": "Esri WorldImagery",
-        "OpenStreetMap": "OpenStreetMap",
-        "Terreno": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
-    }
+    
+# Recria o mapa sem depender de serviços CartoDB
+mapa = folium.Map(
+    location=[lat_default, lon_default],
+    zoom_start=13,
+    tiles=None
+)
+
+# Configuração dos mapas base
+if mapa_tipo == "Padrão":
+    folium.TileLayer(
+        tiles="OpenStreetMap",
+        name="Padrão",
+        attr="© OpenStreetMap contributors",
+        overlay=False,
+        control=True
+    ).add_to(mapa)
+
+elif mapa_tipo == "Satélite":
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        name="Satélite",
+        attr="Tiles © Esri",
+        overlay=False,
+        control=True
+    ).add_to(mapa)
+
+elif mapa_tipo == "Terreno":
+    folium.TileLayer(
+        tiles="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        name="Terreno",
+        attr="Tiles © Esri",
+        overlay=False,
+        control=True
+    ).add_to(mapa)
+
+# Se for "Sem mapa base", não adiciona qualquer camada cartográfica
+
+
+
+    
 
     # Recria o mapa a cada alteração
     mapa = folium.Map(location=[lat_default, lon_default], zoom_start=13, tiles=tiles_dict[mapa_tipo], attr="Esri WorldTopoMap")
